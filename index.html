@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: black;
+        }
+
+        #box1 {
+            position: absolute;
+            transition: top 2s cubic-bezier(1, 0, 0.35, 0.9);
+            top: 0vh;
+            left: 0;
+            width: 100vw;
+            height: 95vh;
+            opacity: 1;
+        }
+
+        #box2 {
+            position: absolute;
+            transition: top 2s cubic-bezier(1, 0, 0.35, 0.90);
+            top: 95vh;
+            left:0;
+            width: 100vw;
+            height: 95vh;
+            opacity: 1;
+        }
+
+        #box3 {
+            position: absolute;
+            transition: top 2s cubic-bezier(1, 0, 0.35, 0.90);
+            top: 190vh;
+            left:0;
+            width: 100vw;
+            height: 95vh;
+            opacity: 1;
+        }
+
+        video {
+            height: 95vh;
+            width: 100vw;
+        }
+
+        #bottom-bar {
+            position: fixed;
+            top: 95vh;
+            z-index: 1;
+        }
+
+        #bottom-bar-img {
+            width: 95vw;
+            height: 6vh;
+        }
+
+        #km-bar {
+            position: fixed;
+            display: flex;
+            top: 0vh;
+            width: 95vw;
+            height: 8vh;
+            z-index: 1;
+            background-color: black;
+            color: white;
+            text-align: center;
+            align-items: center;
+            justify-content: left;
+            font-family: 'Proxima Nova', sans-serif;
+            font-size: xx-large;
+            font-weight: 300;
+        }
+
+        #km-p {
+            padding-left: 5vw;
+        }
+    </style>
+</head>
+<body>
+<div id="km-bar">
+    <p id="km-p">Scrolled distance: 0 km</p>
+</div>
+<div id="bottom-bar"><img id="bottom-bar-img" src="BottomBar.png" alt="BottomBar"></div>
+<div id="box1"><video src="1.mov" autoplay loop></video></div>
+<div id="box2"><video src="2.mov" autoplay loop></video></div>
+<div id="box3"><video src="3.mov" autoplay loop></video></div>
+
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+
+    //Database speed
+    const key ="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2d2R6YnR2eXdoZHdtYnZvc2NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDk2MjgyOTMsImV4cCI6MjAyNTIwNDI5M30.0TD7s5E8ZOk7L1kCJScuDF9niI65zW-kExOSVPDz1nE";
+    const url = "https://yvwdzbtvywhdwmbvosch.supabase.co";
+    const database = supabase.createClient(url, key);
+
+    // Audio Section
+    function handleVideoAudio(entries) {
+        entries.forEach(entry => {
+            const video = entry.target;
+            const opacity = parseFloat(window.getComputedStyle(video.parentElement).getPropertyValue('opacity'));
+
+            if (entry.isIntersecting && opacity === 1) {
+                video.muted = false;
+            } else {
+                video.muted = true;
+            }
+        });
+    }
+
+    const options = {
+        threshold: 0.5,
+    };
+
+    const observer = new IntersectionObserver(handleVideoAudio, options);
+
+    const videoElements = document.querySelectorAll('video');
+    videoElements.forEach(video => {
+        observer.observe(video);
+    });
+
+    // Change Speed and Distance Section
+    let timeout = 2000.0
+    let interval = 4000.0
+    let transitionTime = 2
+    let velocity = 1.2
+    let distance = document.getElementById("km-p")
+    let km = 0
+
+    setInterval(async function() {
+        database
+            .channel('Speed')
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "Speed" },
+                (payload) => {
+                    console.log(payload.new);
+                }
+            )
+            .subscribe();
+
+        let { data, error } = await database.from("Speed").select("*");
+        km = data[0].distance;
+        if (data[0].speed < 1.1){
+            console.log("database speed < 1")
+            velocity = 1.0
+        }else if (data[0].speed >= 1.1 && data[0].speed < 10 ){
+            velocity = data[0].speed;
+        }else if (data[0].speed > 10.0){
+            velocity = 10.0
+        }
+        updateSpeed()
+    },2000)
+
+    function updateSpeed() {
+        console.log("updateSpeed")
+        timeout = 2000.0 / velocity;
+        interval = 4000.0 / velocity;
+        transitionTime = 2.0 / velocity;
+
+        console.log("Update distance");
+        distance.innerHTML = "Scrolled distance: " + km + " km";
+
+        let element1 = document.getElementById('box1');
+        let element2 = document.getElementById('box2');
+        let element3 = document.getElementById('box3');
+
+        element1.style.transition = 'top ' + transitionTime + 's cubic-bezier(1, 0, 0.35, 0.90)';
+        element2.style.transition = 'top ' + transitionTime + 's cubic-bezier(1, 0, 0.35, 0.90)';
+        element3.style.transition = 'top ' + transitionTime + 's cubic-bezier(1, 0, 0.35, 0.90)';
+
+        // Update the video scrolling logic
+        updateVideoScrolling();
+    }
+
+    // Video Scrolling Section
+    let a = 1;
+    let b = 2;
+    let c = 3;
+    let vIndex = 4;
+
+    let scrollInterval = setInterval(updateVideoScrolling, interval);
+
+    function updateVideoScrolling() {
+
+        //change the speed
+        clearInterval(scrollInterval);
+
+        // Recalculate the interval based on the new speed
+        scrollInterval = setInterval(async function () {
+
+            var element1 = document.querySelector("#box" + a);
+            var element2 = document.querySelector("#box" + b);
+            var element3 = document.querySelector("#box" + c);
+
+            element3.style.opacity = 1;
+
+            element1.style.top = "-95vh";
+            element2.style.top = "0vh";
+            element3.style.top = "95vh";
+
+            console.log("AAAAA")
+            setTimeout(function () {
+                element1.style.opacity = 0;
+                element1.style.top = '190vh';
+                let video = element1.querySelector('video');
+                video.src = vIndex + '.mov';
+            }, timeout);
+
+            if (vIndex < 5) {
+                vIndex++;
+            } else {
+                vIndex = 1;
+            }
+
+            if (a < 3) {
+                a++;
+            } else {
+                a = 1;
+            }
+
+            if (b < 3) {
+                b++;
+            } else {
+                b = 1;
+            }
+
+            if (c < 3) {
+                c++;
+            } else {
+                c = 1;
+            }
+            updateVideoScrolling();
+        }, interval);
+    }
+    
+    // Initial setup for setInterval
+    // let scrollInterval = setInterval(updateVideoScrolling, interval);
+
+</script>
+</body>
+</html>
